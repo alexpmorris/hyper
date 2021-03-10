@@ -18,5 +18,32 @@ For browsers that support chrome/firefox extensions, <a href="https://chrome.goo
 to use in the context of a hyperfeed *(feed_alt_crypto is defined in the html)*:
 
 `
-feed = sdk.Hypercore("testkey342423", {crypto: feed_alt_crypto});
+>feed = sdk.Hypercore("testkey342423", {crypto: feed_alt_crypto});
 `
+
+regarding the *possible* verification issue I described on the livestream. There is no replication or persistence with this feed, so
+that *may* be part of the issue. But just in case it's something more, this is what I tested:
+```
+>await feed.append('test123')
+0
+
+>await feed.append('test123')
+1
+
+>await feed.append('test123')
+2
+
+>k1 = sdk.utils.keyPair('','HYP')
+
+>feed.key = sdk.utils.getKeyBytes(k1.publicKey)
+
+>feed.publicKey = sdk.utils.fromKeyString(k1.publicKey, 'public')
+
+>await feed.append('test123')
+3  <-- no rejection on addition after key changed!
+
+HOWEVER, manual verification of feed WILL now fail:
+
+>await feed.verify(feed.length-1, feed._storage.signatures.toBuffer().slice(-64))
+Uncaught Error: Signature verification failed
+```
