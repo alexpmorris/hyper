@@ -1,0 +1,26 @@
+<html>
+  <script src="hyper-sdk-utils-bundle.js"></script>
+  <script>
+      document.addEventListener("DOMContentLoaded", async function() {
+        sdk = await hyperSDK({
+            // With this, all drive will disappear after the process exits
+            // This is here so that running the example doesn't clog up your history
+            persist: false,
+            // storage can be set to an instance of `random-access-*`
+            // const RAI = require('random-access-idb')
+            // otherwise it defaults to `random-access-web` in the browser
+            // and `random-access-file` in node
+            storage: null  //storage: RAI
+        });
+      });
+
+    var feed_alt_crypto = {
+        sign (data, sk, cb) {
+          return cb(null, sdk.utils.sign(data, sk))
+        },
+        verify (sig, data, pk, cb) {
+          return cb(null, sdk.utils.verify(sig, data, pk))
+        }
+      }
+  </script>
+</html>
