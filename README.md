@@ -47,3 +47,32 @@ HOWEVER, manual verification of feed WILL now fail:
 >await feed.verify(feed.length-1, feed._storage.signatures.toBuffer().slice(-64))
 Uncaught Error: Signature verification failed
 ```
+
+Lastly, here is a demo of signing a `feed.append()` using WhaleVault. 
+For now, it still uses graphene's secp256k1-style keys for signing:
+
+```
+  wv_alt_crypto = {
+    async sign (data, sk, cb) {
+      if (sk == null) {
+        if (!whalevault) return cb(new Error('WhaleVault required for signing!'));
+        response = await whalevault.promiseRequestSignBuffer('demo', 'wls:guest123', sdk.utils.buffer.from(data).toString('utf8'), 'Posting', 'feedPost', 'raw');
+        if (response.success) return cb(null, sdk.utils.buffer.from(response.result,'hex').slice(1)); else
+          return cb(new Error(response.message));
+      } else return cb(null, sdk.utils.sign(data, sk))
+    },
+    verify (sig, data, pk, cb) {
+      return cb(null, sdk.utils.verify(sig, data, pk))
+    }
+  }
+  k1 = sdk.utils.keyPair('','HYP');
+  feed = sdk.Hypercore("testkey3424231232111", {crypto: wv_alt_crypto, key: sdk.utils.getKeyBytes(k1.publicKey,'public')})
+  
+  to append:
+  >feed.writable=true; await feed.append('test');
+  
+  to review:
+  >sdk.utils.buffer.from(await feed.get(0)).toString()
+"test"
+  
+```
