@@ -17,9 +17,9 @@ For browsers that support chrome/firefox extensions, <a href="https://chrome.goo
 
 to use in the context of a hyperfeed *(feed_alt_crypto is defined in the html)*:
 
-`
+```
 >feed = sdk.Hypercore("testkey342423", {crypto: feed_alt_crypto});
-`
+```
 
 regarding the *possible* verification issue I described on the livestream. There is no replication or persistence with this feed, so
 that *may* be part of the issue. But just in case it's something more, this is what I tested:
@@ -71,8 +71,8 @@ For now, it still uses graphene's secp256k1-style keys for signing:
   to append:
   >feed.writable=true; await feed.append('test');
   
-  to review:
+  if transaction is confirmed from WhaleVault popup, to review:
   >sdk.utils.buffer.from(await feed.get(0)).toString()
-"test"
+  "test"
   
 ```
