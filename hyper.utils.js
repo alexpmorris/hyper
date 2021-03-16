@@ -17,7 +17,7 @@ const utils = {
         if (keyType !== 'public') {
             key = this.base58.decode(key);
             const version = key.readUInt8(0);
-            if (version != 0x90) throw new Error('Expected version ' + 0x90 + ', instead got ' + version);
+            if (version != 0x90) throw new Error('secretKey: Expected version ' + 0x90 + ', instead got ' + version);
             const raw_key = key.slice(0, -4);
             const key_hash = key.slice(-4);
             let hash = this.sodium.crypto_generichash_instance(raw_key);
@@ -28,7 +28,7 @@ const utils = {
         } else {
             key = this.base58.decode(key.substring(3));
             const version = key.readUInt8(0);
-            if (version != 0x91) throw new Error('Expected version ' + 0x91 + ', instead got ' + version);
+            if (version != 0x91) throw new Error('publicKey: Expected version ' + 0x91 + ', instead got ' + version);
             const raw_key = key.slice(0, -4);
             const key_hash = key.slice(-4);
             let hash = this.sodium.crypto_generichash_instance(raw_key);
@@ -85,12 +85,13 @@ const utils = {
         const discoveryPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_PUBLICKEYBYTES);
         if (!discovery_base) discovery_base = 'hypercore';
         this.sodium.crypto_generichash(discoveryPublicKey, this.buffer.from(discovery_base), publicKey);
-        if (address_prefix) return { 
+        if (address_prefix) var key_obj = { 
             publicKey: this.toKeyString(publicKey, 'public', address_prefix),
             discoveryPublicKey: this.toKeyString(discoveryPublicKey, 'public', address_prefix),
-            secretKey: this.toKeyString(secretKey, 'private'),
-        };
-        return { publicKey, discoveryPublicKey, secretKey: secretKey.slice(0,32) };
+            secretKey: this.toKeyString(secretKey, 'private')
+        }; else var key_obj = { publicKey, discoveryPublicKey, secretKey: secretKey.slice(0,32) };
+        if (discovery_base == 'hypercore') key_obj.url = 'hyper://' + publicKey.toString('hex');
+        return key_obj;
     },
     sign: function(message, secretKey, base58) {
         this.check_init();
