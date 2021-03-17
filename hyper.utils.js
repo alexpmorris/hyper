@@ -68,21 +68,21 @@ const utils = {
     get64BitSecretKey: function(key) {
         this.check_init();
         if (this.buffer.isBuffer(key) && key.length == 64) return key;
-        const publicKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_PUBLICKEYBYTES);
-        var secretKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_SECRETKEYBYTES);
+        const publicKey = this.buffer.alloc(this.sodium.crypto_sign_PUBLICKEYBYTES);
+        var secretKey = this.buffer.alloc(this.sodium.crypto_sign_SECRETKEYBYTES);
         secretKey = this.buffer.concat([this.getKeyBytes(key, 'secret'), publicKey]);
         this.sodium.crypto_sign_seed_keypair(publicKey, secretKey, true); 
         return secretKey;
     },
     keyPair: function(seed, address_prefix, discovery_base) {
         this.check_init();
-        var publicKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_PUBLICKEYBYTES);
-        var secretKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_SECRETKEYBYTES);
+        var publicKey = this.buffer.alloc(this.sodium.crypto_sign_PUBLICKEYBYTES);
+        var secretKey = this.buffer.alloc(this.sodium.crypto_sign_SECRETKEYBYTES);
         if (seed) {
             secretKey = this.get64BitSecretKey(seed);
             publicKey = secretKey.slice(32,64);
         } else this.sodium.crypto_sign_keypair(publicKey, secretKey);
-        const discoveryPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_PUBLICKEYBYTES);
+        const discoveryPublicKey = this.buffer.alloc(this.sodium.crypto_sign_PUBLICKEYBYTES);
         if (!discovery_base) discovery_base = 'hypercore';
         this.sodium.crypto_generichash(discoveryPublicKey, this.buffer.from(discovery_base), publicKey);
         if (address_prefix) var key_obj = { 
@@ -93,13 +93,29 @@ const utils = {
         if (discovery_base == 'hypercore') key_obj.url = 'hyper://' + publicKey.toString('hex');
         return key_obj;
     },
+    generateKeys: function(masterKey, namespace, roles, base58) {
+        this.check_init();
+        if (!Array.isArray(roles)) roles = Array(roles);
+        if (typeof masterKey == 'string') masterKey = this.getKeyBytes(masterKey, 'secret');
+        const key_array = {};
+        for (let i = 0; i < roles.length; i++) {
+            let role = roles[i];
+            let hash = this.sodium.crypto_generichash_instance(masterKey);
+            hash.update(this.buffer.from(this.buffer.byteLength(namespace, 'ascii') + '\n' + namespace, 'ascii'));
+            hash.update(this.buffer.isBuffer(role) ? role : this.buffer.from(role));
+            let output = this.buffer.from(hash.final());
+            if (!base58) key_array[role] = output; else 
+                key_array[role] = this.toKeyString(output, 'secret');
+        };
+        return key_array;
+    },
     sign: function(message, secretKey, base58) {
         this.check_init();
         if (!message) throw new Error('message required');
-        const publicKey = this.buffer.allocUnsafe(this.sodium.crypto_sign_PUBLICKEYBYTES);
+        const publicKey = this.buffer.alloc(this.sodium.crypto_sign_PUBLICKEYBYTES);
         secretKey = this.buffer.concat([this.getKeyBytes(secretKey, 'secret'), publicKey]);
         this.sodium.crypto_sign_seed_keypair(publicKey, secretKey, true);
-        const signature = this.buffer.allocUnsafe(this.sodium.crypto_sign_BYTES);
+        const signature = this.buffer.alloc(this.sodium.crypto_sign_BYTES);
         this.sodium.crypto_sign_detached(signature, this.buffer.from(message), secretKey);
         if (base58) return 'SIG_ED_'+this.base58.encode(signature);
         return signature;
@@ -115,19 +131,19 @@ const utils = {
         if (signature.length != this.sodium.crypto_sign_BYTES) throw new Error('signature must be exactly '+this.sodium.crypto_sign_BYTES+' bytes!');
         return this.sodium.crypto_sign_verify_detached(signature, this.buffer.from(message), publicKey);
     },
-    memo_encrypt: function(secretKey, toPublicKey, message, address_prefix) {
+    memoEncrypt: function(secretKey, toPublicKey, message, address_prefix) {
         this.check_init();
         if (!message) throw new Error('memo message required');
         secretKey = this.get64BitSecretKey(this.getKeyBytes(secretKey, 'secret'));
         toPublicKey = this.getKeyBytes(toPublicKey, 'public');
         const fromPublicKey = secretKey.slice(32,64);
-        const fromMemoSecretKey = this.buffer.allocUnsafe(this.sodium.crypto_box_SECRETKEYBYTES);
+        const fromMemoSecretKey = this.buffer.alloc(this.sodium.crypto_box_SECRETKEYBYTES);
         this.sodium.crypto_sign_ed25519_sk_to_curve25519(fromMemoSecretKey, secretKey);
-        const fromMemoPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_box_PUBLICKEYBYTES);
+        const fromMemoPublicKey = this.buffer.alloc(this.sodium.crypto_box_PUBLICKEYBYTES);
         this.sodium.crypto_sign_ed25519_pk_to_curve25519(fromMemoPublicKey, fromPublicKey);
-        const toMemoPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_box_PUBLICKEYBYTES);
+        const toMemoPublicKey = this.buffer.alloc(this.sodium.crypto_box_PUBLICKEYBYTES);
         this.sodium.crypto_sign_ed25519_pk_to_curve25519(toMemoPublicKey, toPublicKey)
-        const scalarmult_q = this.buffer.allocUnsafe(this.sodium.crypto_scalarmult_BYTES);
+        const scalarmult_q = this.buffer.alloc(this.sodium.crypto_scalarmult_BYTES);
         if (this.sodium.crypto_scalarmult(scalarmult_q, fromMemoSecretKey, toMemoPublicKey) != 0) {
             throw new Error('scalarmult_error');
         }
@@ -137,7 +153,7 @@ const utils = {
         const shared_secret = hash.final();
         const nonce = this.randomBytes(this.sodium.crypto_box_NONCEBYTES);
         message = this.buffer.from(message, 'utf-8');
-        const encrypted = this.buffer.allocUnsafe(this.sodium.crypto_secretbox_MACBYTES+message.byteLength);
+        const encrypted = this.buffer.alloc(this.sodium.crypto_secretbox_MACBYTES+message.byteLength);
         this.sodium.crypto_secretbox_easy(encrypted, message, nonce, shared_secret);
         if (!address_prefix) address_prefix = 'HYP';
         return { from: this.toKeyString(secretKey.slice(32,64), 'public'),
@@ -146,25 +162,25 @@ const utils = {
                  message: encrypted.toString('hex')
                 };
     },
-    memo_decrypt: function(secretKey, message) {
+    memoDecrypt: function(secretKey, message) {
         this.check_init();
         if (!message) throw new Error('memo message required');
         secretKey = this.get64BitSecretKey(this.getKeyBytes(secretKey, 'secret'));
-        const skMemoSecretKey = this.buffer.allocUnsafe(this.sodium.crypto_box_SECRETKEYBYTES);
+        const skMemoSecretKey = this.buffer.alloc(this.sodium.crypto_box_SECRETKEYBYTES);
         this.sodium.crypto_sign_ed25519_sk_to_curve25519(skMemoSecretKey, secretKey);
-        const skMemoPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_box_PUBLICKEYBYTES);
+        const skMemoPublicKey = this.buffer.alloc(this.sodium.crypto_box_PUBLICKEYBYTES);
         this.sodium.crypto_sign_ed25519_pk_to_curve25519(skMemoPublicKey, secretKey.slice(32,64));
         if (typeof message == 'string') message = JSON.parse(message);
         const fromPublicKey = this.getKeyBytes(message.from, 'public');
         const toPublicKey = this.getKeyBytes(message.to, 'public');
-        const fromMemoPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_box_PUBLICKEYBYTES);
+        const fromMemoPublicKey = this.buffer.alloc(this.sodium.crypto_box_PUBLICKEYBYTES);
         this.sodium.crypto_sign_ed25519_pk_to_curve25519(fromMemoPublicKey, fromPublicKey);
-        const toMemoPublicKey = this.buffer.allocUnsafe(this.sodium.crypto_box_PUBLICKEYBYTES);
+        const toMemoPublicKey = this.buffer.alloc(this.sodium.crypto_box_PUBLICKEYBYTES);
         this.sodium.crypto_sign_ed25519_pk_to_curve25519(toMemoPublicKey, toPublicKey)
         if (skMemoPublicKey.compare(fromMemoPublicKey) == 0) var otherMemoPublicKey = toMemoPublicKey; else
             if (skMemoPublicKey.compare(toMemoPublicKey) == 0) var otherMemoPublicKey = fromMemoPublicKey; else
                 throw new Error('publicKey does not match sender or receiver');
-        const scalarmult_q = this.buffer.allocUnsafe(this.sodium.crypto_scalarmult_BYTES);
+        const scalarmult_q = this.buffer.alloc(this.sodium.crypto_scalarmult_BYTES);
         if (this.sodium.crypto_scalarmult(scalarmult_q, skMemoSecretKey, otherMemoPublicKey) != 0) {
             throw new Error('scalarmult_error');
         }
@@ -174,7 +190,7 @@ const utils = {
         const shared_secret = hash.final();
         const nonce = this.bigint(message.nonce).toBuffer();
         let encrypted = this.buffer.from(message.message, 'hex');
-        const decrypted = this.buffer.allocUnsafe(encrypted.byteLength-this.sodium.crypto_secretbox_MACBYTES);
+        const decrypted = this.buffer.alloc(encrypted.byteLength-this.sodium.crypto_secretbox_MACBYTES);
         if (!this.sodium.crypto_secretbox_open_easy(decrypted, encrypted, nonce, shared_secret)) {
             throw new Error('decryption failed')
         }
@@ -182,7 +198,7 @@ const utils = {
     },
     randomBytes: function(n) {
         this.check_init();
-        const buf = this.buffer.allocUnsafe(n);
+        const buf = this.buffer.alloc(n);
         this.sodium.randombytes_buf(buf);
         return buf;
     }
