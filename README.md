@@ -21,8 +21,8 @@ to use in the context of a hyperfeed *(feed_alt_crypto is defined in the html)*:
 >feed = sdk.Hypercore("testkey342423", {crypto: feed_alt_crypto});
 ```
 
-regarding the *possible* verification issue I described on the livestream. There is no replication or persistence with this feed, so
-that *may* be part of the issue. But just in case it's something more, this is what I tested:
+regarding the *possible* verification issue I described on the livestream... apparently, verification takes place on replication. It seems any bad actor can call append() on a feed. However, if the invalid feed is propagated to another node, it would reject the tampered feed in `_verifyAndWrite()`  -> `_verifyRootsAndWrite()`, thus throwing the exception `Remote signature could not be verified`.
+
 ```
 >await feed.append('test123')
 0
